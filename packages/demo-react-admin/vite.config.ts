@@ -1,4 +1,4 @@
-import reactRefresh from '@vitejs/plugin-react-refresh';
+import react from "@vitejs/plugin-react";
 import fs from 'node:fs';
 import path from 'node:path';
 import { defineConfig } from 'vite';
@@ -22,18 +22,14 @@ const aliases = packages.map(dirName => {
  * @type { import('vite').UserConfig }
  */
 export default defineConfig({
-    plugins: [reactRefresh()],
+    plugins: [react()],
     resolve: {
         alias: [
-            ...aliases,
-            {
-                find: /^@mui\/icons-material\/(.*)/,
-                replacement: '@mui/icons-material/esm/$1',
-            },
+            ...aliases
         ],
     },
     server: {
-        port: 8081,
+        port: 5173,
         host: '0.0.0.0',
     },
     build: {
