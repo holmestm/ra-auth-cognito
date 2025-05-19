@@ -1,9 +1,9 @@
-import { useCallback } from 'react';
-import { useLogin, useSafeSetState } from 'react-admin';
+import { useCallback, useState } from 'react';
+import { useLogin } from 'react-admin';
 import { useMutation, UseMutationResult } from '@tanstack/react-query';
-import { ErrorRequireNewPassword } from './ErrorRequireNewPassword';
-import { ErrorMfaTotpRequired } from './ErrorMfaTotpRequired';
-import { ErrorMfaTotpAssociationRequired } from './ErrorMfaTotpAssociationRequired';
+import { ErrorRequireNewPassword } from './errors/ErrorRequireNewPassword';
+import { ErrorMfaTotpRequired } from './errors/ErrorMfaTotpRequired';
+import { ErrorMfaTotpAssociationRequired } from './errors/ErrorMfaTotpAssociationRequired';
 
 export type LoginFormData = {
     username: string;
@@ -86,21 +86,22 @@ export const useCognitoLogin = ({
     redirectTo?: string;
 }): UseCognitoLoginResult => {
     const login = useLogin();
-    const [requireNewPassword, setRequireNewPassword] = useSafeSetState(false);
-    const [requireMfaTotp, setRequireMfaTotp] = useSafeSetState(false);
-    const [requireMfaTotpAssociation, setRequireMfaTotpAssociation] =
-        useSafeSetState(false);
-    const [secretCode, setSecretCode] = useSafeSetState('');
-    const [username, setUsername] = useSafeSetState('');
-    const [applicationName, setApplicationName] = useSafeSetState('');
+    const [requireNewPassword, setRequireNewPassword] = useState(false);
+    const [requireMfaTotp, setRequireMfaTotp] = useState(false);
+    const [requireMfaTotpAssociation, setRequireMfaTotpAssociation] = useState(false);
+    const [secretCode, setSecretCode] = useState('');
+    const [username, setUsername] = useState('');
+    const [applicationName, setApplicationName] = useState('');
 
     const mutation = useMutation<unknown, unknown, FormData>({
         mutationFn: values => login(values, redirectTo),
     });
 
     const cognitoLogin = useCallback(
-        (values: FormData) => {
-            return mutation.mutateAsync(values).catch(error => {
+        async (values: FormData) => {
+            try {
+                return await mutation.mutateAsync(values);
+            } catch (error) {
                 if (error instanceof ErrorMfaTotpAssociationRequired) {
                     setRequireMfaTotpAssociation(true);
                     setRequireMfaTotp(false);
@@ -124,7 +125,7 @@ export const useCognitoLogin = ({
                 }
 
                 throw error;
-            });
+            }
         },
         [
             mutation,

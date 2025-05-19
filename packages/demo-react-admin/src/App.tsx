@@ -1,5 +1,5 @@
 import React from 'react';
-import { Admin, Resource, CustomRoutes } from 'react-admin';
+import { Admin, Resource, CustomRoutes, NotFound } from 'react-admin';
 import { BrowserRouter, Route } from 'react-router-dom';
 import comments from './comments';
 import CustomRouteLayout from './customRouteLayout';
@@ -22,7 +22,7 @@ const userPool = new CognitoUserPool({
 // const authProvider = CognitoAuthProvider(userPool);
 // To test the oauth mode
 const authProvider = CognitoAuthProvider({
-    mode: 'oauth',
+    mode: import.meta.env.VITE_COGNITO_MODE,
     hostedUIUrl: import.meta.env.VITE_COGNITO_HOSTED_UI_URL,
     userPoolId: import.meta.env.VITE_COGNITO_USERPOOL_ID,
     clientId: import.meta.env.VITE_COGNITO_APP_CLIENT_ID,
@@ -40,54 +40,12 @@ const App = () => {
                 i18nProvider={i18nProvider}
                 title="Example Admin"
                 layout={Layout}
-                loginPage={Login}
+                loginPage={authProvider.mode === 'username' ? Login : false}
             >
-                {permissions => (
-                    <>
-                        <CustomRoutes noLayout>
-                            <Route
-                                path="/custom"
-                                element={
-                                    <CustomRouteNoLayout title="Posts from /custom" />
-                                }
-                            />
-                        </CustomRoutes>
-                        <Resource name="posts" {...posts} />
-                        <Resource name="comments" {...comments} />
-                        <Resource name="tags" {...tags} />
-                        {permissions ? (
-                            <>
-                                {permissions.includes('admin') ? (
-                                    <Resource name="users" {...users} />
-                                ) : null}
-                                <CustomRoutes noLayout>
-                                    <Route
-                                        path="/custom1"
-                                        element={
-                                            <CustomRouteNoLayout title="Posts from /custom1" />
-                                        }
-                                    />
-                                </CustomRoutes>
-                                <CustomRoutes>
-                                    <Route
-                                        path="/custom2"
-                                        element={
-                                            <CustomRouteLayout title="Posts from /custom2" />
-                                        }
-                                    />
-                                </CustomRoutes>
-                            </>
-                        ) : null}
-                        <CustomRoutes>
-                            <Route
-                                path="/custom3"
-                                element={
-                                    <CustomRouteLayout title="Posts from /custom3" />
-                                }
-                            />
-                        </CustomRoutes>
-                    </>
-                )}
+                <Resource name="posts" {...posts} />
+                <Resource name="comments" {...comments} />
+                <Resource name="users" {...users} />
+                <Resource name="tags" {...tags} />
             </Admin>
         </BrowserRouter>
     );

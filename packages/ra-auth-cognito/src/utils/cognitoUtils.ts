@@ -2,34 +2,16 @@ import { CognitoAuthProviderOptionsIds } from "../authProvider"
 import { pkceUtils } from "./pkceUtils";
 import { CognitoUserSession, CognitoIdToken, CognitoRefreshToken, CognitoAccessToken, CognitoUser, CognitoUserPool } from "amazon-cognito-identity-js";
 import logger from "./logger";
+import { CognitoTokens, resolveTokens, revokeTokens } from "./cognitoTokens";
 
-export const revokeTokens = async (options: CognitoAuthProviderOptionsIds) => {
-  const { hostedUIUrl, clientId } = options;
-  try {
-    const auth = JSON.parse(localStorage.getItem('auth') || '{}');
-    const accessToken = auth?.access_token;
+export type CognitoIdentity = {
+  id: string;
+  fullName?: string;
+  avatar?: string;
+  cognitoUser: CognitoUser;
+}
 
-    if (!accessToken) {
-      return;
-    }
-
-    // Call the revoke endpoint
-    const revokeEndpoint = new URL(`${hostedUIUrl!.replace('/login', '')}/oauth2/revoke`);
-    const response = await fetch(revokeEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        token: accessToken,
-        clientId,
-      }),
-    });
-    logger.info('Response from revoke endpoint:', response);
-  } catch (error) {
-    logger.error('Error revoking tokens:', error);
-  }
-};
+export type NVPair = { Name: string; Value: string }
 
 export const clearLocalStorage = () => {
   // Clear all auth-related items from localStorage
@@ -41,12 +23,6 @@ export const clearLocalStorage = () => {
       localStorage.removeItem(key);
     }
   }
-
-  // Clear any other auth-related cookies
-  document.cookie.split(';').forEach(cookie => {
-    const [name] = cookie.split('=');
-    document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`;
-  });
 };
 
 export const cognitoLogout = async (options: CognitoAuthProviderOptionsIds) => {
@@ -66,15 +42,11 @@ export const cognitoLogout = async (options: CognitoAuthProviderOptionsIds) => {
       logoutUrl.searchParams.append('id_token_hint', auth.id_token);
     }
 
-    // Clear local storage before redirect
-    clearLocalStorage();
-
     // First revoke the tokens
     await revokeTokens(options);
-    logger.info('Revoke tokens called, redirecting to:', logoutUrl.toString());
 
-    // Wait for all cleanup operations to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Clear local storage before redirect
+    clearLocalStorage();
 
     // Redirect to Cognito logout
     return logoutUrl.toString();
@@ -84,7 +56,7 @@ export const cognitoLogout = async (options: CognitoAuthProviderOptionsIds) => {
     console.trace();
     // Even if there's an error, clear local storage
     clearLocalStorage();
-    window.location.href = `${window.location.origin}/`;
+    return `${window.location.origin}/`;
   }
 };
 
@@ -114,94 +86,11 @@ export const pkceCognitoLogin = async (currentUrl: string, options: CognitoAuthP
     authorizationUrl.searchParams.append('code_challenge_method', 'S256');
 
     // Redirect to Cognito hosted UI
-    window.location.href = authorizationUrl.toString();
+    return authorizationUrl.toString();
   } catch (error) {
     logger.error('Error during PKCE login:', error);
   }
 };
-
-export const resolveTokens = async (code: string, options: CognitoAuthProviderOptionsIds) => {
-
-  // Retrieve code verifier
-  const codeVerifier = sessionStorage.getItem('pkce_code_verifier');
-  if (!codeVerifier) {
-    throw new Error('No code verifier found');
-  }
-
-  logger.info('Exchanging code with verifier:', codeVerifier);
-  logger.info('Received code:', code);
-  // Exchange code for tokens
-  const tokenEndpoint = `${options.hostedUIUrl!.replace('/login', '')}/oauth2/token`;
-  const response = await fetch(tokenEndpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: new URLSearchParams({
-      grant_type: 'authorization_code',
-      client_id: options.clientId!,
-      code_verifier: codeVerifier!,
-      code: code!,
-      redirect_uri: options.redirect_uri!,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error('Failed to exchange code for tokens');
-  }
-
-  const tokens = await response.json();
-
-  logger.info('Received tokens:', tokens);
-  return tokens;
-}
-
-export const refreshToken = async (options: CognitoAuthProviderOptionsIds) => {
-  try {
-    const auth = JSON.parse(localStorage.getItem('auth') || '{}');
-    const refreshToken = auth.refresh_token;
-
-    if (!refreshToken) {
-      throw new Error('No refresh token available');
-    }
-
-    const tokenEndpoint = `${options.hostedUIUrl!.replace('/login', '')}/oauth2/token`;
-    const response = await fetch(tokenEndpoint, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: new URLSearchParams({
-        grant_type: 'refresh_token',
-        client_id: options.clientId,
-        refresh_token: refreshToken,
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to refresh tokens');
-    }
-
-    const tokens = await response.json();
-
-    // Update stored tokens
-    localStorage.setItem('auth', JSON.stringify({
-      ...auth,
-      access_token: tokens.access_token,
-      id_token: tokens.id_token,
-    }));
-
-    return Promise.resolve();
-  } catch (error) {
-    return Promise.reject(error);
-  }
-}
-
-export interface CognitoTokens {
-  id_token: string;
-  refresh_token: string;
-  accessToken: string;
-}
 
 export const createCognitoSession = (
   tokens: CognitoTokens,
